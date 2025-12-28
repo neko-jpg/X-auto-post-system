@@ -66,6 +66,25 @@ const AppState = {
     }
 };
 
+function normalizeEventInfo(raw = {}) {
+    return {
+        eventEn: raw.eventEn || '',
+        eventJp: raw.eventJp || '',
+        date: raw.date || '',
+        venue: raw.venue || '',
+        category: raw.category || 'ブース',
+        hashtags: raw.hashtags || ''
+    };
+}
+
+function getEventInfoForPost(post) {
+    if (post && post.eventInfo && (post.eventInfo.eventEn || post.eventInfo.eventJp)) {
+        return normalizeEventInfo(post.eventInfo);
+    }
+
+    return normalizeEventInfo(AppState.eventInfo || {});
+}
+
 // 投稿アイテムのファクトリ関数
 function createPostItem(overrides = {}) {
     return {
@@ -97,7 +116,14 @@ function addToQueue(postData = {}) {
         postQueue: [...AppState.postQueue]
     };
 
-    const post = createPostItem(postData);
+    const normalizedPostData = { ...postData };
+    if (postData.eventInfo) {
+        normalizedPostData.eventInfo = normalizeEventInfo(postData.eventInfo);
+    } else if (AppState.eventInfo.eventEn || AppState.eventInfo.eventJp) {
+        normalizedPostData.eventInfo = normalizeEventInfo(AppState.eventInfo);
+    }
+
+    const post = createPostItem(normalizedPostData);
     AppState.postQueue.push(post);
 
     // アンドゥスタックに追加
@@ -164,32 +190,49 @@ function parseMultipleEvents(text) {
 
     const events = [];
 
-    // 区切りパターン（優先順位順）
-    const delimiters = [
-        // ①②③...形式
-        /(?:^|\n)([①②③④⑤⑥⑦⑧⑨⑩])\s*\n/gm,
-        // ---投稿1---形式
-        /(?:^|\n)[-=]{3,}.*?(?:投稿|イベント|Event)?\s*(\d+)\s*[-=]{3,}\s*\n/gmi,
-        // 空行で区切られたブロック
-        /\n{2,}/g
-    ];
-
     let blocks = [];
+    const trimmedText = text.trim();
+    if (!trimmedText) return [];
 
     // ①②③形式を優先検出
-    const numberedBlocks = text.split(/(?=^[①②③④⑤⑥⑦⑧⑨⑩])/gm).filter(b => b.trim());
+    const circledBlocks = trimmedText.split(/(?=^[①②③④⑤⑥⑦⑧⑨⑩])/gm).filter(b => b.trim());
+    if (circledBlocks.length > 1) {
+        blocks = circledBlocks;
+    }
 
-    if (numberedBlocks.length > 1) {
-        blocks = numberedBlocks;
-    } else {
-        // イベント名:で始まるブロックで分割
-        const eventNameBlocks = text.split(/(?=(?:イベント名|Event|EVENT)[：:])/gi).filter(b => b.trim());
+    // 1. 2. / (1) 形式
+    if (blocks.length === 0) {
+        const numberedBlocks = trimmedText
+            .split(/(?=^\s*(?:\d+[.)]|\(\d+\))\s+)/gm)
+            .filter(b => b.trim());
+        if (numberedBlocks.length > 1) {
+            blocks = numberedBlocks;
+        }
+    }
+
+    // イベント名: で始まるブロックで分割
+    if (blocks.length === 0) {
+        const eventNameBlocks = trimmedText
+            .split(/(?=(?:イベント名|Event|EVENT)[：:])/gi)
+            .filter(b => b.trim());
         if (eventNameBlocks.length > 1) {
             blocks = eventNameBlocks;
-        } else {
-            // 空行2つ以上で分割
-            blocks = text.split(/\n{3,}/).filter(b => b.trim());
         }
+    }
+
+    // --- / === などの区切り
+    if (blocks.length === 0) {
+        const separatorBlocks = trimmedText
+            .split(/^\s*[-=]{3,}.*$/gm)
+            .filter(b => b.trim());
+        if (separatorBlocks.length > 1) {
+            blocks = separatorBlocks;
+        }
+    }
+
+    // 空行2つ以上で分割
+    if (blocks.length === 0) {
+        blocks = trimmedText.split(/\n{3,}/).filter(b => b.trim());
     }
 
     // 最大10件まで
@@ -219,7 +262,10 @@ function parseEventBlock(block) {
     };
 
     // 番号プレフィックスを除去
-    const cleanBlock = block.replace(/^[①②③④⑤⑥⑦⑧⑨⑩]\s*\n?/, '').trim();
+    const cleanBlock = block
+        .replace(/^[①②③④⑤⑥⑦⑧⑨⑩]\s*\n?/, '')
+        .replace(/^\s*(?:\d+[.)]|\(\d+\))\s*/, '')
+        .trim();
 
     // 各フィールドを抽出
     const patterns = {
@@ -271,6 +317,63 @@ function parseEventBlock(block) {
     return result;
 }
 
+function getAvailableQueueSlots() {
+    let available = 10 - AppState.postQueue.length;
+    if (available > 0) {
+        return available;
+    }
+
+    const shouldClear = confirm('投稿キューがいっぱいです。既存の投稿をクリアして追加しますか？');
+    if (!shouldClear) {
+        showToast('追加をキャンセルしました', 'info');
+        return 0;
+    }
+
+    const previousState = {
+        postQueue: [...AppState.postQueue]
+    };
+
+    AppState.postQueue = [];
+    AppState.currentEditIndex = null;
+
+    if (navigationController) {
+        navigationController.savedQueueState = null;
+    }
+
+    if (window.selectionModeManager && window.selectionModeManager.isSelectionMode) {
+        window.selectionModeManager.exitSelectionMode();
+    }
+
+    const newState = {
+        postQueue: [...AppState.postQueue]
+    };
+    stateManager.pushUndo('CLEAR_QUEUE', previousState, newState);
+
+    renderPostQueue();
+    closeEditModal();
+    return 10;
+}
+
+function setAppEventInfoFromEvents(events) {
+    if (!Array.isArray(events) || events.length === 0) {
+        return;
+    }
+
+    if (events.length === 1) {
+        AppState.eventInfo = normalizeEventInfo(events[0]);
+        return;
+    }
+
+    AppState.eventInfo = {
+        eventEn: 'MULTIPLE EVENTS',
+        eventJp: '複数イベント',
+        date: '',
+        venue: '',
+        category: 'ブース',
+        hashtags: ''
+    };
+}
+
 /**
  * バッチ解析してキューに追加
  */
@@ -282,27 +385,45 @@ function addBatchEventsToQueue(text) {
         return 0;
     }
 
-    const available = 10 - AppState.postQueue.length;
+    const available = getAvailableQueueSlots();
+    if (available <= 0) {
+        return 0;
+    }
+
     const toAdd = events.slice(0, available);
+
+    if (toAdd.length === 0) {
+        showToast('追加できる空きがありません', 'warning');
+        return 0;
+    }
 
     if (toAdd.length < events.length) {
         showToast(`最大10件のため、${toAdd.length}件のみ追加します`, 'warning');
     }
 
+    let addedCount = 0;
     for (const event of toAdd) {
+        const normalized = normalizeEventInfo(event);
         // イベント情報を投稿キューに追加（各イベントごとに EventInfo をセット）
-        addToQueue({
+        const created = addToQueue({
             // イベント情報をキューアイテムに埋め込む
-            eventInfo: { ...event },
+            eventInfo: { ...normalized },
             boothName: '',
             personName: '',
             aiComment: '',
             status: 'draft'
         });
+
+        if (!created) {
+            break;
+        }
+        addedCount += 1;
     }
 
-    showToast(`${toAdd.length}件のイベントを追加しました`, 'success');
-    return toAdd.length;
+    if (addedCount > 0) {
+        showToast(`${addedCount}件のイベントを追加しました`, 'success');
+    }
+    return addedCount;
 }
 
 // ========================================
@@ -392,6 +513,7 @@ function renderPostQueue() {
             </div>
             <div class="queue-actions">
                 <button class="queue-edit-btn" title="編集">✏️</button>
+                <button class="queue-preview-editor-btn" title="SNSプレビュー編集">🎨</button>
                 <button class="queue-send-btn" title="送信">📤</button>
                 <button class="queue-delete-btn" title="削除">🗑️</button>
             </div>
@@ -422,6 +544,17 @@ function renderPostQueue() {
             e.stopPropagation();
             openEditModal(index);
         });
+
+        // Preview Editor button
+        const previewEditorBtn = item.querySelector('.queue-preview-editor-btn');
+        if (previewEditorBtn) {
+            previewEditorBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                if (window.openPreviewEditor) {
+                    window.openPreviewEditor(index);
+                }
+            });
+        }
 
         item.querySelector('.queue-send-btn').addEventListener('click', (e) => {
             e.stopPropagation();
@@ -572,6 +705,26 @@ function openEditModal(index) {
     if (focusManager) {
         focusManager.focusFirstEmptyField();
     }
+
+    // --- Enhanced features (Task 14) ---
+    // Initialize modal navigation if not already done
+    if (!document.querySelector('.modal-navigation')) {
+        addModalNavigation();
+    }
+
+    // Initialize realtime preview if not already done
+    if (!document.querySelector('.realtime-preview-container')) {
+        addRealtimePreview();
+    }
+
+    // Update navigation state
+    updateModalNavigation();
+
+    // Update completion indicators
+    updateCompletionIndicators();
+
+    // Update real-time preview
+    updateRealtimePreview();
 }
 
 function closeEditModal() {
@@ -663,9 +816,10 @@ function updateEditPreviewFull() {
         }
     }
 
-    // Generate and display preview text
+    // Generate and display preview text (Draft only)
     const templates = generatePostTemplatesForItem(post);
     const previewX1 = document.getElementById('edit-preview-x1');
+
     if (previewX1) {
         previewX1.textContent = templates.x1;
     }
@@ -685,7 +839,9 @@ function copyPreviewText(elementId) {
 function updateEditPreview() {
     if (!DOM.editPreviewContent) return;
 
-    const event = AppState.eventInfo;
+    const index = AppState.currentEditIndex;
+    const post = index !== null && index >= 0 ? AppState.postQueue[index] : null;
+    const event = getEventInfoForPost(post);
     const boothName = DOM.editBoothName?.value || '';
     const boothAccount = DOM.editBoothAccount?.value || '';
     const personRole = DOM.editPersonRole?.value || 'モデル';
@@ -724,7 +880,7 @@ async function sendQueueItem(index) {
         return;
     }
 
-    const event = AppState.eventInfo;
+    const event = getEventInfoForPost(post);
     const templates = generatePostTemplatesForItem(post);
 
     const payload = {
@@ -770,11 +926,10 @@ async function sendQueueItem(index) {
 }
 
 function generatePostTemplatesForItem(post) {
-    const event = AppState.eventInfo;
+    const event = getEventInfoForPost(post);
     const hashtags = event.hashtags || '';
-    const hashtagsArray = hashtags.split(' ').filter(h => h.startsWith('#'));
-    const mainHashtag = hashtagsArray[0] || '';
 
+    // ドラフト (X1) テンプレートのみ生成
     const x1 = `📸 ${event.eventEn} – ${event.eventJp}
 ${event.date}｜${event.venue}
 
@@ -789,35 +944,36 @@ ${post.aiComment}
 
 ${hashtags}`.trim();
 
-    const x2 = `📸 ${event.eventEn}
-${event.date}｜${event.venue}
-
-${post.boothName}
-${post.personName ? `${post.personName} さん` : ''} ${post.personAccount}
-
-${post.aiComment}
-
-${mainHashtag}`.trim();
-
-    const igHashtags = hashtags + ' #portrait #ポートレート #eventphoto';
-    const ig = `📸 ${event.eventEn} – ${event.eventJp}
-
-${post.boothName}
-${post.personName ? `${post.personName} さん` : ''}
-
-${post.aiComment}
-
-${igHashtags}`.trim();
-
-    return { x1, x2, ig };
+    // 後方互換性のため x2, ig も同じ値を返す
+    return { x1, x2: x1, ig: x1, draft: x1 };
 }
 
 function clearAllQueue() {
     if (AppState.postQueue.length === 0) return;
 
     if (confirm('全ての投稿をクリアしますか？')) {
+        const previousState = {
+            postQueue: [...AppState.postQueue]
+        };
+
         AppState.postQueue = [];
+        AppState.currentEditIndex = null;
+
+        if (navigationController) {
+            navigationController.savedQueueState = null;
+        }
+
+        if (window.selectionModeManager && window.selectionModeManager.isSelectionMode) {
+            window.selectionModeManager.exitSelectionMode();
+        }
+
+        const newState = {
+            postQueue: [...AppState.postQueue]
+        };
+        stateManager.pushUndo('CLEAR_QUEUE', previousState, newState);
+
         renderPostQueue();
+        closeEditModal();
         showToast('全ての投稿をクリアしました', 'success');
     }
 }
@@ -995,15 +1151,43 @@ const DOM = {
 
 // Global instances
 let focusManager = null;
+let navigationController = null;
+let dragDropManager = null;
 
-document.addEventListener('DOMContentLoaded', () => {
+// App initialization function
+function initApp() {
     loadSettings();
     initStateManager();
     initEventListeners();
     initBatchUI();
     initFocusManager();
     updatePreview();
-});
+
+    // Expose critical objects and functions to window for other ES modules
+    window.AppState = AppState;
+    window.openEditModal = openEditModal;
+    window.closeEditModal = closeEditModal;
+    window.renderPostQueue = renderPostQueue;
+    window.updateQueueItem = updateQueueItem;
+    window.addToQueue = addToQueue;
+    window.removeFromQueue = removeFromQueue;
+    window.showToast = showToast;
+    window.goToStep = goToStep;
+    window.updatePreview = updatePreview;
+    window.updateEditPreview = updateEditPreview;
+
+    window.copyPreviewText = copyPreviewText;
+
+    console.log('[App] Application initialized');
+}
+
+// Handle ES module deferred loading - DOMContentLoaded may have already fired
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initApp);
+} else {
+    // DOM is already ready, initialize immediately
+    initApp();
+}
 
 function initFocusManager() {
     // Initialize FocusManager
@@ -1110,25 +1294,20 @@ function initEventListeners() {
 
             const text = pasteInput.value;
 
-            // Check if this looks like multiple events (①②③ format or multiple イベント名:)
-            const hasMultipleMarkers = /[①②③④⑤⑥⑦⑧⑨⑩]/.test(text) ||
-                (text.match(/イベント名[：:]/gi) || []).length > 1;
+            // Parse as multiple events if possible
+            const events = parseMultipleEvents(text);
+            if (events.length > 1) {
+                parseResult.innerHTML = `<span class="success">✓ ${events.length}件のイベントを検出しました</span>`;
 
-            if (hasMultipleMarkers) {
-                // Parse as multiple events and add to queue
-                const events = parseMultipleEvents(text);
-                if (events.length > 0) {
-                    parseResult.innerHTML = `<span class="success">✓ ${events.length}件のイベントを検出しました</span>`;
+                // Add batch events to queue
+                const added = addBatchEventsToQueue(text);
 
-                    // Add batch events to queue
-                    const added = addBatchEventsToQueue(text);
-
-                    if (added > 0) {
-                        // Go to step 2 to show the queue
-                        goToStep(2);
-                    }
-                    return;
+                if (added > 0) {
+                    setAppEventInfoFromEvents(events);
+                    // Go to step 2 to show the queue
+                    goToStep(2, { preserveQueue: false, force: true });
                 }
+                return;
             }
 
             // Single event: Parse using event-patterns.js
@@ -1137,19 +1316,30 @@ function initEventListeners() {
             // Apply to form
             window.UniversalEventParser.applyParsedData(result);
 
-            // Show result feedback
-            if (result.confidence > 30) {
-                parseResult.innerHTML = `<span class="success">✓ ${result.matched.length}項目を検出しました</span>`;
-                showToast('イベント情報を解析しました', 'success');
+            const hasEventName = !!(result.eventEn || result.eventJp);
 
-                // Switch to manual tab to show filled form
-                document.querySelectorAll('.input-tab').forEach(t => t.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                document.querySelector('[data-tab="manual"]')?.classList.add('active');
-                document.getElementById('manual-tab')?.classList.add('active');
+            // Show result feedback
+            if (hasEventName) {
+                parseResult.innerHTML = `<span class="success">✓ ${result.matched.length}項目を検出しました</span>`;
+
+                const available = getAvailableQueueSlots();
+                if (available > 0) {
+                    saveEventInfo();
+                    const post = addToQueue({
+                        boothName: '',
+                        personName: '',
+                        aiComment: '',
+                        status: 'draft'
+                    });
+
+                    if (post) {
+                        showToast('イベント情報を解析して投稿を作成しました', 'success');
+                        goToStep(2, { preserveQueue: false, force: true });
+                    }
+                }
             } else {
-                parseResult.innerHTML = `<span class="warning">⚠ 一部の項目のみ検出されました</span>`;
-                showToast('一部の情報を解析しました。手動で確認してください', 'warning');
+                parseResult.innerHTML = `<span class="warning">⚠ イベント名を検出できませんでした</span>`;
+                showToast('イベント名を検出できませんでした', 'error');
             }
         });
     }
@@ -1810,12 +2000,13 @@ async function generateComment() {
 
 function generatePostTemplates() {
     const event = AppState.eventInfo;
-    const boothName = DOM.boothName.value || '';
-    const boothAccount = DOM.boothAccount.value || '';
-    const personRole = DOM.personRole.value || 'モデル';
-    const personName = DOM.personName.value || '';
-    const personAccount = DOM.personAccount.value || '';
-    const aiComment = DOM.aiComment.value || '';
+    // DOM要素がnullの場合（Step 1時など）は空文字を使用
+    const boothName = DOM.boothName?.value || '';
+    const boothAccount = DOM.boothAccount?.value || '';
+    const personRole = DOM.personRole?.value || 'モデル';
+    const personName = DOM.personName?.value || '';
+    const personAccount = DOM.personAccount?.value || '';
+    const aiComment = DOM.aiComment?.value || '';
     const hashtags = event.hashtags || '';
 
     // Extract main hashtag for X2
@@ -1978,8 +2169,6 @@ function showToast(message, type = 'info') {
 // ========================================
 
 let currentParseResult = null;
-let navigationController = null;
-let dragDropManager = null;
 
 /**
  * Opens the bulk text parser modal with parsed results
@@ -2129,7 +2318,10 @@ function applyParsedEntries() {
     }
 
     const entries = currentParseResult.entries;
-    const availableSlots = 10 - AppState.postQueue.length;
+    const availableSlots = getAvailableQueueSlots();
+    if (availableSlots <= 0) {
+        return;
+    }
 
     if (entries.length > availableSlots) {
         showToast(`キューに空きが${availableSlots}件しかありません`, 'warning');
@@ -2137,8 +2329,14 @@ function applyParsedEntries() {
 
     const entriesToAdd = entries.slice(0, availableSlots);
 
-    entriesToAdd.forEach(entry => {
-        addToQueue({
+    if (entriesToAdd.length === 0) {
+        showToast('追加できる空きがありません', 'warning');
+        return;
+    }
+
+    let addedCount = 0;
+    for (const entry of entriesToAdd) {
+        const created = addToQueue({
             boothName: entry.boothName || '',
             boothAccount: entry.boothAccount || '',
             personName: entry.personName || '',
@@ -2146,9 +2344,16 @@ function applyParsedEntries() {
             personRole: entry.role || 'モデル',
             aiComment: ''
         });
-    });
 
-    showToast(`${entriesToAdd.length}件の投稿を追加しました`, 'success');
+        if (!created) {
+            break;
+        }
+        addedCount += 1;
+    }
+
+    if (addedCount > 0) {
+        showToast(`${addedCount}件の投稿を追加しました`, 'success');
+    }
     closeBulkParserModal();
 }
 
@@ -2467,7 +2672,9 @@ function updateRealtimePreview() {
     const previewElement = document.getElementById('realtime-preview-text');
     if (!previewElement) return;
 
-    const event = AppState.eventInfo;
+    const index = AppState.currentEditIndex;
+    const post = index !== null && index >= 0 ? AppState.postQueue[index] : null;
+    const event = getEventInfoForPost(post);
     const boothName = DOM.editBoothName?.value || '';
     const boothAccount = DOM.editBoothAccount?.value || '';
     const personRole = DOM.editPersonRole?.value || 'モデル';
@@ -2493,41 +2700,10 @@ ${event.hashtags}`.trim();
 }
 
 // ========================================
-// Enhanced openEditModal with new features
+// Initialize Task 14 features
 // ========================================
 
-// Store original openEditModal
-const originalOpenEditModal = openEditModal;
-
-// Override openEditModal to include new features
-function openEditModal(index) {
-    // Call original function
-    originalOpenEditModal(index);
-
-    // Initialize new features if not already done
-    if (!document.querySelector('.modal-navigation')) {
-        addModalNavigation();
-    }
-
-    if (!document.querySelector('.realtime-preview-container')) {
-        addRealtimePreview();
-    }
-
-    // Update navigation state
-    updateModalNavigation();
-
-    // Update completion indicators
-    updateCompletionIndicators();
-
-    // Update real-time preview
-    updateRealtimePreview();
-}
-
-// ========================================
-// Initialize Task 14 features on DOMContentLoaded
-// ========================================
-
-document.addEventListener('DOMContentLoaded', () => {
+function initTask14Features() {
     // Initialize collapsible sections
     initCollapsibleSections();
 
@@ -2545,4 +2721,11 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
     });
-});
+}
+
+// Add Task14 initialization to the main init
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initTask14Features);
+} else {
+    initTask14Features();
+}

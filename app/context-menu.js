@@ -293,11 +293,20 @@ class ContextMenuManager {
      */
     handleCopyText(post) {
         // Generate post text
-        const event = window.AppState?.eventInfo;
-        if (!event) {
+        const sourceEvent = post.eventInfo || window.AppState?.eventInfo;
+        if (!sourceEvent || (!sourceEvent.eventEn && !sourceEvent.eventJp)) {
             window.showToast('イベント情報が設定されていません', 'error');
             return;
         }
+
+        const event = {
+            eventEn: sourceEvent.eventEn || '',
+            eventJp: sourceEvent.eventJp || '',
+            date: sourceEvent.date || '',
+            venue: sourceEvent.venue || '',
+            category: sourceEvent.category || 'ブース',
+            hashtags: sourceEvent.hashtags || ''
+        };
 
         const text = this.generatePostText(post, event);
 

@@ -141,7 +141,7 @@ class BatchProcessor {
                 body: JSON.stringify({
                     booth_name: post.boothName || '',
                     role: post.personRole || 'モデル',
-                    category: window.AppState.eventInfo?.category || 'ブース',
+                    category: (post.eventInfo?.category || window.AppState.eventInfo?.category || 'ブース'),
                     expression_type: expressionType,
                     focus_point: focusPoint,
                     context_match: contextMatch,
@@ -317,10 +317,19 @@ class BatchProcessor {
 
         // 投稿テンプレートを生成
         const templates = this.generatePostTemplatesForItem(post);
+        const sourceEvent = post.eventInfo || window.AppState?.eventInfo || {};
+        const event = {
+            eventEn: sourceEvent.eventEn || '',
+            eventJp: sourceEvent.eventJp || '',
+            date: sourceEvent.date || '',
+            venue: sourceEvent.venue || '',
+            category: sourceEvent.category || 'ブース',
+            hashtags: sourceEvent.hashtags || ''
+        };
 
         const payload = {
             timestamp: new Date().toISOString(),
-            event: window.AppState.eventInfo,
+            event: event,
             photo: {
                 base64: post.imageBase64
             },
@@ -375,7 +384,15 @@ class BatchProcessor {
      * @returns {Object} - テンプレート
      */
     generatePostTemplatesForItem(post) {
-        const event = window.AppState?.eventInfo || {};
+        const sourceEvent = post.eventInfo || window.AppState?.eventInfo || {};
+        const event = {
+            eventEn: sourceEvent.eventEn || '',
+            eventJp: sourceEvent.eventJp || '',
+            date: sourceEvent.date || '',
+            venue: sourceEvent.venue || '',
+            category: sourceEvent.category || 'ブース',
+            hashtags: sourceEvent.hashtags || ''
+        };
         const hashtags = event.hashtags || '';
         const hashtagsArray = hashtags.split(' ').filter(h => h.startsWith('#'));
         const mainHashtag = hashtagsArray[0] || '';

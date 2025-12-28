@@ -9,6 +9,9 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap"
         rel="stylesheet">
+    <!-- Cropper.js for image editing -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cropperjs/1.6.1/cropper.min.js"></script>
     <script type="module" src="event-patterns.js"></script>
     <script type="module" src="comment-rules.js"></script>
     <script type="module" src="bulk-text-parser.js"></script>
@@ -28,6 +31,8 @@
     <script type="module" src="selection-mode.js"></script>
     <script type="module" src="focus-manager.js"></script>
     <script type="module" src="touch-gestures.js"></script>
+    <script type="module" src="preview-editor.js"></script>
+    <script type="module" src="image-editor.js"></script>
 </head>
 
 <body>
@@ -38,31 +43,20 @@
             <p class="subtitle">TGS / レース / 展示会</p>
         </header>
 
-        <!-- Step Indicator -->
+        <!-- Step Indicator (Clickable) -->
         <div class="step-indicator">
-            <div class="step active" id="step1-indicator">
+            <button class="step active" id="step1-indicator" onclick="window.goToStep && window.goToStep(1)">
                 <span class="step-number">1</span>
                 <span class="step-label">イベント設定</span>
-            </div>
+            </button>
             <div class="step-line"></div>
-            <div class="step" id="step2-indicator">
+            <button class="step" id="step2-indicator" onclick="window.goToStep && window.goToStep(2)">
                 <span class="step-number">2</span>
                 <span class="step-label">写真投稿</span>
-            </div>
+            </button>
         </div>
 
-        <!-- Breadcrumb Navigation -->
-        <nav class="breadcrumb-nav" id="breadcrumb-nav">
-            <button class="breadcrumb-item" id="breadcrumb-step1" data-step="1">
-                <span class="breadcrumb-icon">📄</span>
-                <span class="breadcrumb-text">イベント設定</span>
-            </button>
-            <span class="breadcrumb-separator">›</span>
-            <button class="breadcrumb-item" id="breadcrumb-step2" data-step="2" disabled>
-                <span class="breadcrumb-icon">📸</span>
-                <span class="breadcrumb-text">写真投稿</span>
-            </button>
-        </nav>
+        <!-- Breadcrumb Navigation (Removed - using clickable step indicators instead) -->
 
         <!-- Step 1: Event Setup -->
         <section class="step-panel active" id="step1-panel">
@@ -90,7 +84,7 @@
 会場: 幕張メッセ
 ハッシュタグ: #TGS2025 #イベコン"></textarea>
                     <button class="btn btn-primary" id="parse-paste-btn">
-                        🔍 解析して入力
+                        🔍 解析してキューへ追加 →
                     </button>
                     <div class="parse-result" id="parse-result"></div>
                 </div>
@@ -152,7 +146,7 @@
                         </div>
                     </div>
                     <button type="submit" class="btn btn-primary btn-large">
-                        ✓ イベント設定を確定
+                        ✓ 確定して写真投稿へ →
                     </button>
                 </form>
             </div>
@@ -169,7 +163,7 @@
                         <span id="summary-event-meta">2025.09.25-28｜幕張メッセ</span>
                     </div>
                 </div>
-                <button class="btn btn-ghost btn-small" id="change-event-btn">変更</button>
+                <button class="btn btn-ghost btn-small" id="change-event-btn">← イベント情報を変更</button>
             </div>
 
             <!-- Quick Add Section -->
@@ -229,29 +223,13 @@
             <div class="preview-section" id="live-preview-section" style="display: none;">
                 <h3>📄 プレビュー</h3>
                 <div class="preview-cards">
-                    <div class="preview-card">
+                    <div class="preview-card preview-card-full">
                         <div class="preview-header">
-                            <span class="preview-icon">𝕏</span>
-                            <span class="preview-title">X (メイン)</span>
+                            <span class="preview-icon">📝</span>
+                            <span class="preview-title">ドラフト</span>
                         </div>
                         <div class="preview-content" id="preview-x1"></div>
-                        <button class="btn btn-copy" data-target="preview-x1">📋 コピー</button>
-                    </div>
-                    <div class="preview-card">
-                        <div class="preview-header">
-                            <span class="preview-icon">𝕏</span>
-                            <span class="preview-title">X (サブ)</span>
-                        </div>
-                        <div class="preview-content" id="preview-x2"></div>
-                        <button class="btn btn-copy" data-target="preview-x2">📋 コピー</button>
-                    </div>
-                    <div class="preview-card">
-                        <div class="preview-header">
-                            <span class="preview-icon">📷</span>
-                            <span class="preview-title">Instagram</span>
-                        </div>
-                        <div class="preview-content" id="preview-ig"></div>
-                        <button class="btn btn-copy" data-target="preview-ig">📋 コピー</button>
+                        <button class="btn btn-copy" onclick="copyPreviewText('preview-x1')">📋 コピー</button>
                     </div>
                 </div>
             </div>
@@ -312,10 +290,12 @@
                                                     <option value="">-- テンプレートを選択 --</option>
                                                 </select>
                                             </div>
-                                            <button class="btn btn-ghost btn-small" id="save-booth-template-btn" title="現在のブース情報をテンプレートとして保存">
+                                            <button class="btn btn-ghost btn-small" id="save-booth-template-btn"
+                                                title="現在のブース情報をテンプレートとして保存">
                                                 💾 保存
                                             </button>
-                                            <button class="btn btn-ghost btn-small" id="manage-templates-btn" title="テンプレートを管理">
+                                            <button class="btn btn-ghost btn-small" id="manage-templates-btn"
+                                                title="テンプレートを管理">
                                                 ⚙️
                                             </button>
                                         </div>
@@ -330,7 +310,8 @@
                                         <input type="text" id="edit-booth-account" placeholder="@SEGA">
                                     </div>
                                     <div class="form-group">
-                                        <button class="btn btn-ghost btn-small" id="apply-booth-to-all-btn" style="width: 100%;">
+                                        <button class="btn btn-ghost btn-small" id="apply-booth-to-all-btn"
+                                            style="width: 100%;">
                                             📋 このブース情報を全ての投稿に適用
                                         </button>
                                     </div>
@@ -416,10 +397,11 @@
                             <span class="photo-placeholder">画像なし</span>
                         </div>
                         <div class="preview-text-container">
-                            <div class="preview-card-large">
+                            <!-- ドラフト -->
+                            <div class="preview-card-large preview-card-full">
                                 <div class="preview-header">
-                                    <span class="preview-icon">𝕏</span>
-                                    <span class="preview-title">X (メイン)</span>
+                                    <span class="preview-icon">📝</span>
+                                    <span class="preview-title">ドラフト</span>
                                 </div>
                                 <div class="preview-content-large" id="edit-preview-x1"></div>
                                 <button class="btn btn-copy" onclick="copyPreviewText('edit-preview-x1')">📋
@@ -433,6 +415,136 @@
                 <div class="fullscreen-footer">
                     <button class="btn btn-ghost" id="cancel-edit-btn">キャンセル</button>
                     <button class="btn btn-primary btn-large" id="save-edit-btn">💾 保存してプレビューへ</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- SNS Preview Editor Modal (Full Screen) -->
+        <div class="modal fullscreen-modal" id="preview-editor-modal">
+            <div class="fullscreen-modal-content preview-editor">
+                <!-- Header with mode switching -->
+                <div class="fullscreen-header preview-editor-header">
+                    <div class="fullscreen-title">
+                        <h2>🎨 SNSプレビューエディター</h2>
+                    </div>
+                    <div class="preview-editor-modes">
+                        <button class="mode-btn active" data-mode="both" id="mode-both">
+                            <span class="mode-icon">⬜⬜</span> 両方表示
+                        </button>
+                        <button class="mode-btn" data-mode="image" id="mode-image">
+                            <span class="mode-icon">🖼️</span> 画像のみ
+                        </button>
+                        <button class="mode-btn" data-mode="text" id="mode-text">
+                            <span class="mode-icon">📝</span> テキストのみ
+                        </button>
+                    </div>
+                    <button class="modal-close" id="close-preview-editor">×</button>
+                </div>
+
+                <!-- Editor Panels -->
+                <div class="fullscreen-body preview-editor-body">
+                    <div class="preview-editor-panels" data-active-mode="both">
+                        <!-- Left Panel: Image Editor -->
+                        <div class="editor-panel image-editor-panel" id="image-editor-panel">
+                            <div class="panel-toolbar">
+                                <span class="panel-title">🖼️ 画像編集</span>
+                                <div class="toolbar-actions">
+                                    <button class="btn btn-ghost btn-small" id="image-reset-btn">↩️ リセット</button>
+                                </div>
+                            </div>
+                            <div class="image-preview-container" id="image-preview-container">
+                                <img id="editor-image" src="" alt="編集画像" style="display: none;">
+                                <div class="image-placeholder" id="editor-image-placeholder">
+                                    <span class="placeholder-icon">📷</span>
+                                    <p>画像をドラッグ＆ドロップ</p>
+                                    <p class="placeholder-hint">または下の「画像を選択」をクリック</p>
+                                </div>
+                            </div>
+                            <input type="file" id="editor-image-input" accept="image/*" hidden>
+                            <div class="image-controls">
+                                <button class="btn btn-secondary" id="editor-image-select">📷 画像を選択</button>
+                                <div class="image-tools">
+                                    <!-- Basic tools - Phase 3 will expand these -->
+                                    <button class="tool-btn" id="tool-crop" title="トリミング">✂️</button>
+                                    <button class="tool-btn" id="tool-rotate" title="回転">🔄</button>
+                                    <button class="tool-btn" id="tool-flip" title="反転">↔️</button>
+                                </div>
+                            </div>
+                            <div class="image-adjustments">
+                                <div class="adjustment-slider">
+                                    <label>☀️ 明るさ</label>
+                                    <input type="range" id="adjust-brightness" min="-100" max="100" value="0">
+                                    <span class="slider-value" id="brightness-value">0</span>
+                                </div>
+                                <div class="adjustment-slider">
+                                    <label>🎨 コントラスト</label>
+                                    <input type="range" id="adjust-contrast" min="-100" max="100" value="0">
+                                    <span class="slider-value" id="contrast-value">0</span>
+                                </div>
+                                <div class="adjustment-slider">
+                                    <label>🌈 彩度</label>
+                                    <input type="range" id="adjust-saturation" min="-100" max="100" value="0">
+                                    <span class="slider-value" id="saturation-value">0</span>
+                                </div>
+                            </div>
+                            <button class="btn btn-primary" id="apply-image-to-draft">✓ ドラフトに適用</button>
+                        </div>
+
+                        <!-- Right Panel: Text Editor (X-style) -->
+                        <div class="editor-panel text-editor-panel" id="text-editor-panel">
+                            <div class="panel-toolbar">
+                                <span class="panel-title">📝 投稿テキスト</span>
+                                <div class="char-counter">
+                                    <span id="char-count">0</span> / 280
+                                </div>
+                            </div>
+
+                            <!-- X-style post preview/editor -->
+                            <div class="x-post-editor">
+                                <div class="x-post-header">
+                                    <div class="x-avatar">📸</div>
+                                    <div class="x-user-info">
+                                        <span class="x-display-name">Event Photo</span>
+                                        <span class="x-handle">@your_handle</span>
+                                    </div>
+                                </div>
+
+                                <div class="x-post-content">
+                                    <div class="x-post-text" contenteditable="true" id="x-post-text-editor"
+                                        placeholder="投稿内容をここに入力..."></div>
+
+                                    <div class="x-post-media" id="x-post-media">
+                                        <!-- Image thumbnail will appear here -->
+                                        <div class="media-placeholder">画像プレビュー</div>
+                                    </div>
+                                </div>
+
+                                <div class="x-post-toolbar">
+                                    <div class="toolbar-left">
+                                        <button class="x-tool-btn" id="insert-emoji" title="絵文字">😀</button>
+                                        <button class="x-tool-btn" id="insert-hashtag" title="ハッシュタグ">#️⃣</button>
+                                        <button class="x-tool-btn" id="insert-mention" title="メンション">@</button>
+                                        <button class="x-tool-btn" id="insert-template" title="テンプレート">📋</button>
+                                    </div>
+                                    <div class="toolbar-right">
+                                        <span class="char-warning" id="char-warning" style="display: none;">⚠️
+                                            文字数超過</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="text-editor-actions">
+                                <button class="btn btn-secondary" id="copy-post-text">📋 テキストをコピー</button>
+                                <button class="btn btn-primary" id="save-post-text">💾 保存</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Footer -->
+                <div class="fullscreen-footer preview-editor-footer">
+                    <button class="btn btn-ghost" id="cancel-preview-editor">キャンセル</button>
+                    <button class="btn btn-primary btn-large" id="save-preview-editor">💾 変更を保存</button>
                 </div>
             </div>
         </div>
@@ -599,6 +711,41 @@
             </div>
         </div>
 
+        <!-- Bulk Apply Modal -->
+        <div class="modal" id="bulk-apply-modal">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 id="bulk-apply-title">🏢 一括適用</h2>
+                    <button class="modal-close" id="close-bulk-apply">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p id="bulk-apply-description">選択した投稿に適用します</p>
+                    <div class="form-group" id="bulk-apply-booth-fields">
+                        <label for="bulk-booth-name">ブース名</label>
+                        <input type="text" id="bulk-booth-name" placeholder="ブース名を入力">
+                    </div>
+                    <div class="form-group" id="bulk-apply-account-field">
+                        <label for="bulk-booth-account">ブースアカウント（オプション）</label>
+                        <input type="text" id="bulk-booth-account" placeholder="@アカウント">
+                    </div>
+                    <div class="form-group" id="bulk-apply-role-field" style="display: none;">
+                        <label for="bulk-role">役割</label>
+                        <select id="bulk-role">
+                            <option value="モデル">モデル</option>
+                            <option value="RQ">RQ</option>
+                            <option value="コンパニオン">コンパニオン</option>
+                            <option value="スタッフ">スタッフ</option>
+                            <option value="その他">その他</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-ghost" id="cancel-bulk-apply">キャンセル</button>
+                    <button class="btn btn-primary" id="confirm-bulk-apply">適用</button>
+                </div>
+            </div>
+        </div>
+
         <!-- History Modal -->
         <div class="modal fullscreen-modal" id="history-modal">
             <div class="fullscreen-modal-content">
@@ -651,6 +798,11 @@
 
         <!-- Toast Notification -->
         <div class="toast" id="toast"></div>
+
+        <!-- Keyboard Shortcut Hint -->
+        <div class="keyboard-hint" id="keyboard-hint">
+            <span>⌨️ ? でショートカット一覧</span>
+        </div>
     </div>
 
     <script type="module" src="batch-processor.js"></script>

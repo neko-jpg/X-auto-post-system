@@ -247,7 +247,7 @@ class SelectionModeManager {
     }
 
     /**
-     * Handle bulk apply booth
+     * Handle bulk apply booth - using modal instead of prompt()
      */
     handleBulkApplyBooth() {
         if (this.selectedIndices.size === 0) {
@@ -255,33 +255,125 @@ class SelectionModeManager {
             return;
         }
 
-        // Prompt for booth info
-        const boothName = prompt('ブース名を入力してください:');
-        if (!boothName) return;
+        // Show bulk apply modal for booth
+        this.showBulkApplyModal('booth');
+    }
 
-        const boothAccount = prompt('ブースアカウントを入力してください (オプション):');
+    /**
+     * Show bulk apply modal
+     * @param {string} type - 'booth' or 'role'
+     */
+    showBulkApplyModal(type) {
+        const modal = document.getElementById('bulk-apply-modal');
+        const title = document.getElementById('bulk-apply-title');
+        const description = document.getElementById('bulk-apply-description');
+        const boothFields = document.getElementById('bulk-apply-booth-fields');
+        const accountField = document.getElementById('bulk-apply-account-field');
+        const roleField = document.getElementById('bulk-apply-role-field');
 
+        if (!modal) return;
+
+        // Reset fields
+        const boothNameInput = document.getElementById('bulk-booth-name');
+        const boothAccountInput = document.getElementById('bulk-booth-account');
+        const roleSelect = document.getElementById('bulk-role');
+        if (boothNameInput) boothNameInput.value = '';
+        if (boothAccountInput) boothAccountInput.value = '';
+        if (roleSelect) roleSelect.value = 'モデル';
+
+        // Configure modal for booth or role
+        if (type === 'booth') {
+            if (title) title.textContent = '🏢 ブース情報を一括適用';
+            if (description) description.textContent = `${this.selectedIndices.size}件の投稿にブース情報を適用します`;
+            if (boothFields) boothFields.style.display = 'block';
+            if (accountField) accountField.style.display = 'block';
+            if (roleField) roleField.style.display = 'none';
+            modal.dataset.applyType = 'booth';
+        } else {
+            if (title) title.textContent = '👤 役割を一括適用';
+            if (description) description.textContent = `${this.selectedIndices.size}件の投稿に役割を適用します`;
+            if (boothFields) boothFields.style.display = 'none';
+            if (accountField) accountField.style.display = 'none';
+            if (roleField) roleField.style.display = 'block';
+            modal.dataset.applyType = 'role';
+        }
+
+
+        modal.classList.add('active');
+
+        // Setup event listeners
+        this.setupBulkApplyModalListeners();
+    }
+
+    /**
+     * Setup event listeners for bulk apply modal
+     */
+    setupBulkApplyModalListeners() {
+        const modal = document.getElementById('bulk-apply-modal');
+        const closeBtn = document.getElementById('close-bulk-apply');
+        const cancelBtn = document.getElementById('cancel-bulk-apply');
+        const confirmBtn = document.getElementById('confirm-bulk-apply');
+
+        const closeModal = () => {
+            if (modal) modal.classList.remove('active');
+        };
+
+        if (closeBtn) closeBtn.onclick = closeModal;
+        if (cancelBtn) cancelBtn.onclick = closeModal;
+
+        if (confirmBtn) {
+            confirmBtn.onclick = () => {
+                this.executeBulkApply(modal.dataset.applyType);
+                closeModal();
+            };
+        }
+    }
+
+    /**
+     * Execute bulk apply
+     * @param {string} type - 'booth' or 'role'
+     */
+    executeBulkApply(type) {
         const indices = this.getSelectedIndices();
-        const confirmMsg = `${indices.length}件の投稿にブース情報を適用しますか？\n\nブース名: ${boothName}\nアカウント: ${boothAccount || '(なし)'}`;
 
-        if (!confirm(confirmMsg)) return;
+        if (type === 'booth') {
+            const boothName = document.getElementById('bulk-booth-name')?.value || '';
+            const boothAccount = document.getElementById('bulk-booth-account')?.value || '';
 
-        // Apply to selected items
-        indices.forEach(index => {
-            if (window.AppState && window.AppState.postQueue[index]) {
-                window.updateQueueItem(index, {
-                    boothName: boothName,
-                    boothAccount: boothAccount || ''
-                });
+            if (!boothName) {
+                window.showToast('ブース名を入力してください', 'warning');
+                return;
             }
-        });
 
-        window.showToast(`${indices.length}件にブース情報を適用しました`, 'success');
+            indices.forEach(index => {
+                if (window.AppState && window.AppState.postQueue[index]) {
+                    window.updateQueueItem(index, {
+                        boothName: boothName,
+                        boothAccount: boothAccount
+                    });
+                }
+            });
+
+            window.showToast(`${indices.length}件にブース情報を適用しました`, 'success');
+        } else {
+            const role = document.getElementById('bulk-role')?.value || 'モデル';
+
+            indices.forEach(index => {
+                if (window.AppState && window.AppState.postQueue[index]) {
+                    window.updateQueueItem(index, {
+                        personRole: role
+                    });
+                }
+            });
+
+            window.showToast(`${indices.length}件に役割を適用しました`, 'success');
+        }
+
         this.exitSelectionMode();
     }
 
     /**
-     * Handle bulk apply role
+     * Handle bulk apply role - using modal instead of prompt()
      */
     handleBulkApplyRole() {
         if (this.selectedIndices.size === 0) {
@@ -289,26 +381,8 @@ class SelectionModeManager {
             return;
         }
 
-        // Prompt for role
-        const role = prompt('役割を入力してください (例: モデル, RQ, コンパニオン):');
-        if (!role) return;
-
-        const indices = this.getSelectedIndices();
-        const confirmMsg = `${indices.length}件の投稿に役割「${role}」を適用しますか？`;
-
-        if (!confirm(confirmMsg)) return;
-
-        // Apply to selected items
-        indices.forEach(index => {
-            if (window.AppState && window.AppState.postQueue[index]) {
-                window.updateQueueItem(index, {
-                    personRole: role
-                });
-            }
-        });
-
-        window.showToast(`${indices.length}件に役割を適用しました`, 'success');
-        this.exitSelectionMode();
+        // Show bulk apply modal for role
+        this.showBulkApplyModal('role');
     }
 
     /**

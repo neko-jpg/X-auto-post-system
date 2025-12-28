@@ -78,15 +78,15 @@ class InlineEditManager {
 
         // Get current value (remove "未設定" or default text)
         let currentValue = element.textContent.trim();
-        
+
         // Remove edit icon from text
         currentValue = currentValue.replace('✏️', '').trim();
-        
+
         // Remove default text patterns
         if (currentValue === '未設定' || currentValue === '名前未設定' || currentValue === 'コメント未設定') {
             currentValue = '';
         }
-        
+
         // For person name, remove " さん" suffix
         if (field === 'personName' && currentValue.endsWith(' さん')) {
             currentValue = currentValue.slice(0, -3).trim();
@@ -246,3 +246,9 @@ const inlineEditManager = new InlineEditManager();
 
 // Export for use in other modules
 export { InlineEditManager, inlineEditManager };
+
+// Browser global
+if (typeof window !== 'undefined') {
+    window.InlineEditManager = InlineEditManager;
+    window.inlineEditManager = inlineEditManager;
+}

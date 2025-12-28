@@ -20,7 +20,7 @@ class FocusManager {
             'edit-expression-type',
             'edit-ai-comment'
         ];
-        
+
         this.textareaFields = ['edit-ai-comment'];
         this.initialized = false;
     }
@@ -30,10 +30,10 @@ class FocusManager {
      */
     initialize() {
         if (this.initialized) return;
-        
+
         this._setupEnterKeyNavigation();
         this._setupAutocompleteListeners();
-        
+
         this.initialized = true;
         console.log('[FocusManager] Initialized');
     }
@@ -92,7 +92,7 @@ class FocusManager {
         for (let i = currentIndex + 1; i < this.fieldOrder.length; i++) {
             const nextFieldId = this.fieldOrder[i];
             const nextField = document.getElementById(nextFieldId);
-            
+
             if (nextField && this._isEmpty(nextField)) {
                 this._focusField(nextField);
                 return;
@@ -113,7 +113,7 @@ class FocusManager {
     focusFirstEmptyField() {
         for (const fieldId of this.fieldOrder) {
             const field = document.getElementById(fieldId);
-            
+
             if (field && this._isEmpty(field)) {
                 // 少し遅延させてモーダルのアニメーションが完了してからフォーカス
                 setTimeout(() => {
@@ -169,9 +169,9 @@ class FocusManager {
         }
 
         // フィールドをスクロールして表示
-        field.scrollIntoView({ 
-            behavior: 'smooth', 
-            block: 'center' 
+        field.scrollIntoView({
+            behavior: 'smooth',
+            block: 'center'
         });
     }
 
@@ -197,3 +197,8 @@ class FocusManager {
 
 // Export for use in other modules
 export { FocusManager };
+
+// Browser global
+if (typeof window !== 'undefined') {
+    window.FocusManager = FocusManager;
+}
