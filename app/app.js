@@ -28,7 +28,6 @@ const AppState = {
         aiComment: ''
     },
     settings: {
-        geminiApiKey: '',
         makeWebhookUrl: ''
     }
 };
@@ -99,7 +98,6 @@ const DOM = {
     settingsModal: document.getElementById('settings-modal'),
     openSettingsBtn: document.getElementById('open-settings'),
     closeSettingsBtn: document.getElementById('close-settings'),
-    geminiApiKey: document.getElementById('gemini-api-key'),
     makeWebhookUrl: document.getElementById('make-webhook-url'),
     saveSettingsBtn: document.getElementById('save-settings-btn'),
 
@@ -121,13 +119,11 @@ function loadSettings() {
     const savedSettings = localStorage.getItem('autoPostSettings');
     if (savedSettings) {
         AppState.settings = JSON.parse(savedSettings);
-        DOM.geminiApiKey.value = AppState.settings.geminiApiKey || '';
         DOM.makeWebhookUrl.value = AppState.settings.makeWebhookUrl || '';
     }
 }
 
 function saveSettings() {
-    AppState.settings.geminiApiKey = DOM.geminiApiKey.value;
     AppState.settings.makeWebhookUrl = DOM.makeWebhookUrl.value;
     localStorage.setItem('autoPostSettings', JSON.stringify(AppState.settings));
     showToast('設定を保存しました', 'success');
@@ -139,6 +135,57 @@ function saveSettings() {
 // ========================================
 
 function initEventListeners() {
+    // ========================================
+    // Tab Navigation for Event Input
+    // ========================================
+    document.querySelectorAll('.input-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            // Remove active from all tabs and contents
+            document.querySelectorAll('.input-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+
+            // Activate clicked tab and corresponding content
+            tab.classList.add('active');
+            const tabId = tab.dataset.tab + '-tab';
+            document.getElementById(tabId)?.classList.add('active');
+        });
+    });
+
+    // Parse paste button
+    const parsePasteBtn = document.getElementById('parse-paste-btn');
+    if (parsePasteBtn) {
+        parsePasteBtn.addEventListener('click', () => {
+            const pasteInput = document.getElementById('paste-input');
+            const parseResult = document.getElementById('parse-result');
+
+            if (!pasteInput.value.trim()) {
+                showToast('テキストを入力してください', 'error');
+                return;
+            }
+
+            // Parse the text using event-patterns.js
+            const result = parseEventText(pasteInput.value);
+
+            // Apply to form
+            applyParsedData(result);
+
+            // Show result feedback
+            if (result.confidence > 30) {
+                parseResult.innerHTML = `<span class="success">✓ ${result.matched.length}項目を検出しました</span>`;
+                showToast('イベント情報を解析しました', 'success');
+
+                // Switch to manual tab to show filled form
+                document.querySelectorAll('.input-tab').forEach(t => t.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                document.querySelector('[data-tab="manual"]')?.classList.add('active');
+                document.getElementById('manual-tab')?.classList.add('active');
+            } else {
+                parseResult.innerHTML = `<span class="warning">⚠ 一部の項目のみ検出されました</span>`;
+                showToast('一部の情報を解析しました。手動で確認してください', 'warning');
+            }
+        });
+    }
+
     // Event file drop zone
     setupDropZone(DOM.eventDropZone, DOM.eventFileInput, handleEventFile);
     DOM.eventFileInput.addEventListener('change', (e) => {
@@ -323,6 +370,38 @@ function updateEventSummary() {
 // Photo Handling
 // ========================================
 
+/**
+ * 画像を圧縮する
+ * @param {string} dataUrl - Base64形式の画像データURL
+ * @param {number} maxWidth - 最大幅
+ * @param {number} quality - JPEG品質 (0-1)
+ * @returns {Promise<string>} 圧縮後のBase64データURL
+ */
+async function compressImage(dataUrl, maxWidth = 1000, quality = 0.85) {
+    return new Promise((resolve) => {
+        const img = new Image();
+        img.onload = () => {
+            // 圧縮が必要かチェック
+            if (img.width <= maxWidth && img.height <= maxWidth) {
+                resolve(dataUrl); // 既に小さい場合はそのまま
+                return;
+            }
+
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            // アスペクト比を維持してリサイズ
+            const ratio = Math.min(maxWidth / img.width, maxWidth / img.height);
+            canvas.width = img.width * ratio;
+            canvas.height = img.height * ratio;
+
+            ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+            resolve(canvas.toDataURL('image/jpeg', quality));
+        };
+        img.src = dataUrl;
+    });
+}
+
 function handlePhotoFile(file) {
     if (!file.type.startsWith('image/')) {
         showToast('画像ファイルを選択してください', 'error');
@@ -331,15 +410,24 @@ function handlePhotoFile(file) {
 
     AppState.photoData.imageFile = file;
 
-    // Create preview
+    // Create preview and compress
     const reader = new FileReader();
-    reader.onload = (e) => {
-        AppState.photoData.imageBase64 = e.target.result;
-        DOM.photoPreview.innerHTML = `<img src="${e.target.result}" alt="Preview">`;
+    reader.onload = async (e) => {
+        // 大きな画像を圧縮
+        const compressed = await compressImage(e.target.result);
+        AppState.photoData.imageBase64 = compressed;
+        DOM.photoPreview.innerHTML = `<img src="${compressed}" alt="Preview">`;
+
+        // 圧縮情報を表示
+        const originalSize = (e.target.result.length * 0.75 / 1024).toFixed(0);
+        const compressedSize = (compressed.length * 0.75 / 1024).toFixed(0);
+        if (compressed !== e.target.result) {
+            showToast(`写真を読み込みました (${originalSize}KB → ${compressedSize}KB)`, 'success');
+        } else {
+            showToast('写真を読み込みました', 'success');
+        }
     };
     reader.readAsDataURL(file);
-
-    showToast('写真を読み込みました', 'success');
 }
 
 function clearPhotoInput() {
@@ -376,11 +464,13 @@ function nextPhoto() {
 }
 
 // ========================================
-// Comment Generation (FastAPI + Rule-Based Fallback)
+// Comment Generation (Netlify Functions + Rule-Based Fallback)
 // ========================================
 
-// FastAPI サーバーのURL（ローカル開発用）
-const API_BASE_URL = 'http://localhost:8000';
+// API URL (Netlify Functions経由)
+// ローカル開発時: netlify dev で /.netlify/functions/ が利用可能
+// 本番環境: /api/ が /.netlify/functions/ にリダイレクト
+const API_BASE_URL = '/.netlify/functions';
 
 /**
  * コメントを生成（FastAPI経由でGemini APIを呼び出し）

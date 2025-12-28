@@ -1,0 +1,16 @@
+{
+    "name": "x-auto-post-system",
+    "version": "1.0.0",
+    "description": "イベント写真自動投稿システム",
+    "scripts": {
+        "dev": "netlify dev",
+        "build": "echo 'No build step required'",
+        "deploy": "netlify deploy --prod"
+    },
+    "dependencies": {
+        "@google/generative-ai": "^0.21.0"
+    },
+    "devDependencies": {
+        "netlify-cli": "^18.0.0"
+    }
+}

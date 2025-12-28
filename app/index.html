@@ -9,6 +9,7 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&family=Inter:wght@400;500;600;700&display=swap"
         rel="stylesheet">
+    <script src="event-patterns.js"></script>
     <script src="comment-rules.js"></script>
 </head>
 
@@ -37,67 +38,94 @@
         <section class="step-panel active" id="step1-panel">
             <div class="panel-header">
                 <h2>📄 イベント情報を設定</h2>
-                <p>event_info.txt をドロップするか、手動で入力してください</p>
+                <p>テキスト貼り付け・ファイル読込・手動入力から選択</p>
             </div>
 
-            <!-- File Drop Zone -->
-            <div class="drop-zone" id="event-drop-zone">
-                <div class="drop-zone-content">
-                    <span class="drop-icon">📄</span>
-                    <p>event_info.txt をドラッグ&ドロップ</p>
-                    <span class="drop-or">または</span>
-                    <input type="file" id="event-file-input" accept=".txt" hidden>
-                    <button class="btn btn-secondary" onclick="document.getElementById('event-file-input').click()">
-                        ファイルを選択
+            <!-- Input Method Tabs -->
+            <div class="input-tabs">
+                <button class="input-tab active" data-tab="paste">📋 テキスト貼り付け</button>
+                <button class="input-tab" data-tab="file">📄 ファイル読込</button>
+                <button class="input-tab" data-tab="manual">✏️ 手動入力</button>
+            </div>
+
+            <!-- Tab: Text Paste (ChatGPT output) -->
+            <div class="tab-content active" id="paste-tab">
+                <div class="paste-section">
+                    <textarea id="paste-input" rows="6" placeholder="ChatGPTの出力をここに貼り付け...
+
+例:
+イベント名: TOKYO GAME SHOW 2025
+日本語名: 東京ゲームショウ2025
+日付: 2025.09.25-28
+会場: 幕張メッセ
+ハッシュタグ: #TGS2025 #イベコン"></textarea>
+                    <button class="btn btn-primary" id="parse-paste-btn">
+                        🔍 解析して入力
                     </button>
+                    <div class="parse-result" id="parse-result"></div>
                 </div>
             </div>
 
-            <div class="divider">
-                <span>または手動入力</span>
+            <!-- Tab: File Drop -->
+            <div class="tab-content" id="file-tab">
+                <div class="drop-zone" id="event-drop-zone">
+                    <div class="drop-zone-content">
+                        <span class="drop-icon">📄</span>
+                        <p>event_info.txt をドラッグ&ドロップ</p>
+                        <span class="drop-or">または</span>
+                        <input type="file" id="event-file-input" accept=".txt" hidden>
+                        <button class="btn btn-secondary" onclick="document.getElementById('event-file-input').click()">
+                            ファイルを選択
+                        </button>
+                    </div>
+                </div>
             </div>
 
-            <!-- Manual Input Form -->
-            <form class="event-form" id="event-form">
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="event-en">イベント名（英語）</label>
-                        <input type="text" id="event-en" placeholder="TOKYO GAME SHOW 2025">
+            <!-- Tab: Manual Input -->
+            <div class="tab-content" id="manual-tab">
+
+                <!-- Manual Input Form -->
+                <form class="event-form" id="event-form">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="event-en">イベント名（英語）</label>
+                            <input type="text" id="event-en" placeholder="TOKYO GAME SHOW 2025">
+                        </div>
+                        <div class="form-group">
+                            <label for="event-jp">イベント名（日本語）</label>
+                            <input type="text" id="event-jp" placeholder="東京ゲームショウ2025">
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label for="event-jp">イベント名（日本語）</label>
-                        <input type="text" id="event-jp" placeholder="東京ゲームショウ2025">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="event-date">開催日</label>
+                            <input type="text" id="event-date" placeholder="2025.09.25 - 28">
+                        </div>
+                        <div class="form-group">
+                            <label for="event-venue">会場</label>
+                            <input type="text" id="event-venue" placeholder="幕張メッセ">
+                        </div>
                     </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="event-date">開催日</label>
-                        <input type="text" id="event-date" placeholder="2025.09.25 - 28">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="event-category">カテゴリ</label>
+                            <select id="event-category">
+                                <option value="ブース">ブース</option>
+                                <option value="チーム">チーム</option>
+                                <option value="出展">出展</option>
+                                <option value="サーキット">サーキット</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="event-hashtags">ハッシュタグ</label>
+                            <input type="text" id="event-hashtags" placeholder="#TGS2025 #イベントコンパニオン">
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label for="event-venue">会場</label>
-                        <input type="text" id="event-venue" placeholder="幕張メッセ">
-                    </div>
-                </div>
-                <div class="form-row">
-                    <div class="form-group">
-                        <label for="event-category">カテゴリ</label>
-                        <select id="event-category">
-                            <option value="ブース">ブース</option>
-                            <option value="チーム">チーム</option>
-                            <option value="出展">出展</option>
-                            <option value="サーキット">サーキット</option>
-                        </select>
-                    </div>
-                    <div class="form-group">
-                        <label for="event-hashtags">ハッシュタグ</label>
-                        <input type="text" id="event-hashtags" placeholder="#TGS2025 #イベントコンパニオン">
-                    </div>
-                </div>
-                <button type="submit" class="btn btn-primary btn-large">
-                    ✓ イベント設定を確定
-                </button>
-            </form>
+                    <button type="submit" class="btn btn-primary btn-large">
+                        ✓ イベント設定を確定
+                    </button>
+                </form>
+            </div>
         </section>
 
         <!-- Step 2: Photo Posting -->
@@ -273,12 +301,9 @@
                 </div>
                 <div class="modal-body">
                     <div class="form-group">
-                        <label for="gemini-api-key">Gemini API Key</label>
-                        <input type="password" id="gemini-api-key" placeholder="API Keyを入力">
-                    </div>
-                    <div class="form-group">
                         <label for="make-webhook-url">Make.com Webhook URL</label>
                         <input type="text" id="make-webhook-url" placeholder="https://hook.make.com/...">
+                        <small style="color: var(--text-muted); margin-top: 4px;">※ 設定は開発者から受け取ってください</small>
                     </div>
                     <button class="btn btn-primary" id="save-settings-btn">保存</button>
                 </div>
