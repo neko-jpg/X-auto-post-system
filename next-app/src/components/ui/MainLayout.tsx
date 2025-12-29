@@ -1,6 +1,7 @@
 "use client";
 
 import { Sidebar } from "@/components/ui/Sidebar";
+import { ToastContainer } from "@/components/ui/Toast";
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
     return (
@@ -9,6 +10,7 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
             <main className="flex-1 overflow-x-hidden">
                 {children}
             </main>
+            <ToastContainer />
         </div>
     );
 }

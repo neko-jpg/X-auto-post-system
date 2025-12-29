@@ -137,6 +137,22 @@ const testMixedMarkers = `
 日付：2026.04.10
 `;
 
+// Test 5: Content BEFORE first marker should be captured
+const testPreMarkerContent = `
+日本語名：没入型テクノロジー・デイ
+日付：2026.07.18
+会場：チームラボプラネッツ周辺施設
+ハッシュタグ：#ImmersiveTech #没入体験
+
+㉙
+
+イベント名：YOUTH INNOVATION FORUM
+日本語名：ユース・イノベーション・フォーラム
+日付：2026.03.01
+会場：早稲田大学 国際会議場
+ハッシュタグ：#YouthInnovation #学生主導
+`;
+
 // --- Test Runner ---
 
 function runTests() {
@@ -174,11 +190,22 @@ function runTests() {
     console.log(`  Pass: ${result4.entries.length === 2 ? '✓' : '✗'}`);
     console.log();
 
+    // Test 5: Pre-marker content (2 entries)
+    console.log('Test 5: Pre-marker content (expecting 2 entries)');
+    const result5 = parseUniversal(testPreMarkerContent);
+    console.log(`  Result: ${result5.entries.length} entries`);
+    console.log(`  Pass: ${result5.entries.length === 2 ? '✓' : '✗'}`);
+    if (result5.entries.length > 0) {
+        console.log(`  First entry JP event: ${result5.entries[0].eventInfo?.eventJp || 'N/A'}`);
+    }
+    console.log();
+
     // Summary
     const allPassed = result1.entries.length === 10 &&
         result2.entries.length === 3 &&
         result3.entries.length === 3 &&
-        result4.entries.length === 2;
+        result4.entries.length === 2 &&
+        result5.entries.length === 2;
 
     console.log('=== Summary ===');
     console.log(`All tests passed: ${allPassed ? '✓ YES' : '✗ NO'}`);

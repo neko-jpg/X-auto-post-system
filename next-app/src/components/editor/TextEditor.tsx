@@ -4,22 +4,54 @@ import { useAppStore } from "@/store/useAppStore";
 import { cn } from "@/utils/cn";
 import {
     Maximize2, Minimize2, Type, Hash, AtSign, Smile,
-    Bold, Italic, Sparkles
+    Bold, Italic, Sparkles, ChevronDown, ChevronUp, User, Building2
 } from "lucide-react";
 import { useState, useRef } from "react";
+import { EmojiPicker } from "./EmojiPicker";
+
+const PERSON_ROLES = [
+    'モデル',
+    'RQ',
+    'レースクイーン',
+    'コンパニオン',
+    'コスプレイヤー',
+    'アンバサダー',
+    'タレント',
+    'アイドル',
+    'その他'
+];
+
+const EXPRESSION_TYPES = [
+    '笑顔',
+    'クール',
+    '柔らか',
+    '華やか',
+    '自然',
+    '力強い'
+];
 
 export function TextEditor() {
     const { postQueue, currentEditIndex, updateQueueItem } = useAppStore();
     const [isZenMode, setIsZenMode] = useState(false);
+    const [showMetadata, setShowMetadata] = useState(true);
+    const [showPersonInfo, setShowPersonInfo] = useState(true);
+    const [isEmojiPickerOpen, setIsEmojiPickerOpen] = useState(false);
+    const [emojiPickerPosition, setEmojiPickerPosition] = useState({ top: 100, left: 100 });
     const textareaRef = useRef<HTMLTextAreaElement>(null);
+    const emojiButtonRef = useRef<HTMLButtonElement>(null);
 
     // Metadata handlers
-    const handleMetadataChange = (key: keyof any, value: string) => {
+    const handleMetadataChange = (key: string, value: string) => {
         if (!postQueue[currentEditIndex!]) return;
         const currentEvent = postQueue[currentEditIndex!].eventInfo || {};
         updateQueueItem(currentEditIndex!, {
             eventInfo: { ...currentEvent, [key]: value }
         });
+    };
+
+    const handlePostFieldChange = (key: string, value: string) => {
+        if (!postQueue[currentEditIndex!]) return;
+        updateQueueItem(currentEditIndex!, { [key]: value });
     };
 
     if (currentEditIndex === null || !postQueue[currentEditIndex]) return null;
@@ -61,6 +93,31 @@ export function TextEditor() {
         const text = post.aiComment;
         const newText = text.substring(0, start) + textToInsert + text.substring(end);
         updateQueueItem(currentEditIndex!, { aiComment: newText });
+
+        // Refocus and set cursor position
+        setTimeout(() => {
+            if (textareaRef.current) {
+                textareaRef.current.focus();
+                const newPos = start + textToInsert.length;
+                textareaRef.current.setSelectionRange(newPos, newPos);
+            }
+        }, 0);
+    };
+
+    const handleEmojiButtonClick = () => {
+        if (emojiButtonRef.current) {
+            const rect = emojiButtonRef.current.getBoundingClientRect();
+            setEmojiPickerPosition({
+                top: rect.bottom + 8,
+                left: Math.max(10, rect.left - 150)
+            });
+        }
+        setIsEmojiPickerOpen(true);
+    };
+
+    const handleEmojiSelect = (emoji: string) => {
+        insertText(emoji);
+        setIsEmojiPickerOpen(false);
     };
 
     return (
@@ -82,8 +139,14 @@ export function TextEditor() {
                         <Italic className="w-4 h-4" />
                     </button>
                     <div className="w-px h-6 bg-white/10 mx-2" />
-                    {/* Emoji Logic - simplified for now */}
-                    <button onClick={() => insertText('✨')} className="p-2 hover:bg-white/10 rounded-lg text-white" title="Insert Sparkles">
+
+                    {/* Emoji Picker Button */}
+                    <button
+                        ref={emojiButtonRef}
+                        onClick={handleEmojiButtonClick}
+                        className="p-2 hover:bg-white/10 rounded-lg text-white"
+                        title="絵文字ピッカー"
+                    >
                         <Smile className="w-4 h-4" />
                     </button>
                     <button onClick={() => insertText('#')} className="p-2 hover:bg-white/10 rounded-lg text-white" title="Hashtag">
@@ -95,9 +158,9 @@ export function TextEditor() {
                 </div>
 
                 <div className="flex items-center gap-4">
-                    {/* Metadata Toggle or Inputs */}
-                    <div className="hidden md:flex items-center gap-2 text-xs text-[var(--text-muted)]">
-                        {post.eventInfo.eventEn || post.boothName}
+                    {/* Character Count */}
+                    <div className="text-xs text-[var(--text-muted)]">
+                        {post.aiComment.length} / 280
                     </div>
 
                     <div className="w-px h-6 bg-white/10" />
@@ -114,53 +177,160 @@ export function TextEditor() {
 
             {/* Editor Area & Metadata Form */}
             <div className={cn(
-                "flex-1 relative flex flex-col",
-                isZenMode ? "bg-[var(--bg-primary)] overflow-y-auto items-center" : "bg-[var(--bg-card)]"
+                "flex-1 relative flex flex-col overflow-y-auto",
+                isZenMode ? "bg-[var(--bg-primary)] items-center" : "bg-[var(--bg-card)]"
             )}>
                 {!isZenMode && (
-                    <div className="p-4 grid grid-cols-2 gap-4 border-b border-white/5 bg-[var(--bg-tertiary)]/30">
-                        <input
-                            placeholder="Event Name"
-                            className="bg-transparent border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-[var(--accent-primary)] outline-none"
-                            value={post.eventInfo.eventEn}
-                            onChange={(e) => handleMetadataChange('eventEn', e.target.value)}
-                        />
-                        <input
-                            placeholder="Venue"
-                            className="bg-transparent border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-[var(--accent-primary)] outline-none"
-                            value={post.eventInfo.venue}
-                            onChange={(e) => handleMetadataChange('venue', e.target.value)}
-                        />
-                        <div className="col-span-2 grid grid-cols-2 gap-4">
-                            <input
-                                placeholder="Date (e.g. 2023.12.30)"
-                                className="bg-transparent border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-[var(--accent-primary)] outline-none"
-                                value={post.eventInfo.date}
-                                onChange={(e) => handleMetadataChange('date', e.target.value)}
-                            />
-                            <input
-                                placeholder="Booth Name"
-                                className="bg-transparent border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-[var(--accent-primary)] outline-none"
-                                value={post.boothName}
-                                onChange={(e) => updateQueueItem(currentEditIndex!, { boothName: e.target.value })}
-                            />
+                    <>
+                        {/* イベント情報セクション */}
+                        <div className="border-b border-white/5 bg-[var(--bg-tertiary)]/30">
+                            <button
+                                onClick={() => setShowMetadata(!showMetadata)}
+                                className="w-full px-4 py-3 flex items-center justify-between text-sm font-medium text-[var(--text-secondary)] hover:bg-white/5"
+                            >
+                                <span className="flex items-center gap-2">
+                                    <Building2 className="w-4 h-4" />
+                                    イベント・ブース情報
+                                </span>
+                                {showMetadata ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                            </button>
+
+                            {showMetadata && (
+                                <div className="p-4 pt-0 grid grid-cols-2 gap-3">
+                                    <input
+                                        placeholder="Event Name (EN)"
+                                        className="bg-transparent border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-[var(--accent-primary)] outline-none"
+                                        value={post.eventInfo?.eventEn || ''}
+                                        onChange={(e) => handleMetadataChange('eventEn', e.target.value)}
+                                    />
+                                    <input
+                                        placeholder="イベント名 (日本語)"
+                                        className="bg-transparent border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-[var(--accent-primary)] outline-none"
+                                        value={post.eventInfo?.eventJp || ''}
+                                        onChange={(e) => handleMetadataChange('eventJp', e.target.value)}
+                                    />
+                                    <input
+                                        placeholder="Date (e.g. 2024.12.30)"
+                                        className="bg-transparent border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-[var(--accent-primary)] outline-none"
+                                        value={post.eventInfo?.date || ''}
+                                        onChange={(e) => handleMetadataChange('date', e.target.value)}
+                                    />
+                                    <input
+                                        placeholder="会場 / Venue"
+                                        className="bg-transparent border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-[var(--accent-primary)] outline-none"
+                                        value={post.eventInfo?.venue || ''}
+                                        onChange={(e) => handleMetadataChange('venue', e.target.value)}
+                                    />
+                                    <input
+                                        placeholder="ブース名 / Booth Name"
+                                        className="bg-transparent border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-[var(--accent-primary)] outline-none"
+                                        value={post.boothName || ''}
+                                        onChange={(e) => handlePostFieldChange('boothName', e.target.value)}
+                                    />
+                                    <input
+                                        placeholder="ブース公式@ / Booth Account"
+                                        className="bg-transparent border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-[var(--accent-primary)] outline-none"
+                                        value={post.boothAccount || ''}
+                                        onChange={(e) => handlePostFieldChange('boothAccount', e.target.value)}
+                                    />
+                                </div>
+                            )}
                         </div>
-                    </div>
+
+                        {/* 人物情報セクション */}
+                        <div className="border-b border-white/5 bg-[var(--bg-tertiary)]/30">
+                            <button
+                                onClick={() => setShowPersonInfo(!showPersonInfo)}
+                                className="w-full px-4 py-3 flex items-center justify-between text-sm font-medium text-[var(--text-secondary)] hover:bg-white/5"
+                            >
+                                <span className="flex items-center gap-2">
+                                    <User className="w-4 h-4" />
+                                    人物情報
+                                </span>
+                                {showPersonInfo ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                            </button>
+
+                            {showPersonInfo && (
+                                <div className="p-4 pt-0 grid grid-cols-2 gap-3">
+                                    <select
+                                        className="bg-[var(--bg-tertiary)] border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-[var(--accent-primary)] outline-none"
+                                        value={post.personRole || 'モデル'}
+                                        onChange={(e) => handlePostFieldChange('personRole', e.target.value)}
+                                    >
+                                        {PERSON_ROLES.map(role => (
+                                            <option key={role} value={role}>{role}</option>
+                                        ))}
+                                    </select>
+                                    <input
+                                        placeholder="名前 / Name"
+                                        className="bg-transparent border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-[var(--accent-primary)] outline-none"
+                                        value={post.personName || ''}
+                                        onChange={(e) => handlePostFieldChange('personName', e.target.value)}
+                                    />
+                                    <input
+                                        placeholder="Xアカウント @account"
+                                        className="bg-transparent border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-[var(--accent-primary)] outline-none col-span-2"
+                                        value={post.personAccount || ''}
+                                        onChange={(e) => handlePostFieldChange('personAccount', e.target.value)}
+                                    />
+                                </div>
+                            )}
+                        </div>
+
+                        {/* ハッシュタグ・表情セクション */}
+                        <div className="p-4 border-b border-white/5 bg-[var(--bg-tertiary)]/20">
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="text-xs text-[var(--text-muted)] mb-1 block">ハッシュタグ</label>
+                                    <input
+                                        placeholder="#イベント #撮影"
+                                        className="w-full bg-transparent border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-[var(--accent-primary)] outline-none"
+                                        value={post.eventInfo?.hashtags || ''}
+                                        onChange={(e) => handleMetadataChange('hashtags', e.target.value)}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="text-xs text-[var(--text-muted)] mb-1 block">表情タイプ</label>
+                                    <select
+                                        className="w-full bg-[var(--bg-tertiary)] border border-white/10 rounded px-3 py-2 text-sm text-white focus:border-[var(--accent-primary)] outline-none"
+                                        value={(post as any).expressionType || '笑顔'}
+                                        onChange={(e) => handlePostFieldChange('expressionType', e.target.value)}
+                                    >
+                                        {EXPRESSION_TYPES.map(type => (
+                                            <option key={type} value={type}>{type}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </>
                 )}
 
-                <textarea
-                    ref={textareaRef}
-                    value={post.aiComment}
-                    onChange={(e) => updateQueueItem(currentEditIndex!, { aiComment: e.target.value })}
-                    placeholder="Write your caption here..."
-                    className={cn(
-                        "w-full flex-1 resize-none outline-none text-[var(--text-primary)] bg-transparent p-6 placeholder:text-[var(--text-muted)]",
-                        isZenMode
-                            ? "max-w-3xl text-xl leading-relaxed py-20 font-serif h-auto overflow-hidden"
-                            : "text-base leading-relaxed h-full"
-                    )}
-                />
+                {/* Main Text Area */}
+                <div className={cn("flex-1 flex flex-col", isZenMode && "max-w-3xl w-full")}>
+                    <label className="px-4 pt-3 text-xs text-[var(--text-muted)]">一言コメント / Caption</label>
+                    <textarea
+                        ref={textareaRef}
+                        value={post.aiComment}
+                        onChange={(e) => updateQueueItem(currentEditIndex!, { aiComment: e.target.value })}
+                        placeholder="一言コメントを入力してください..."
+                        className={cn(
+                            "w-full flex-1 resize-none outline-none text-[var(--text-primary)] bg-transparent p-4 placeholder:text-[var(--text-muted)]",
+                            isZenMode
+                                ? "text-xl leading-relaxed py-10 font-serif"
+                                : "text-base leading-relaxed min-h-[120px]"
+                        )}
+                    />
+                </div>
             </div>
+
+            {/* Emoji Picker */}
+            <EmojiPicker
+                isOpen={isEmojiPickerOpen}
+                onClose={() => setIsEmojiPickerOpen(false)}
+                onSelect={handleEmojiSelect}
+                position={emojiPickerPosition}
+            />
         </div>
     );
 }

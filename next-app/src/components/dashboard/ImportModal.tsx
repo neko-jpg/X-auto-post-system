@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { X, Upload, FileText, Check, AlertCircle } from "lucide-react";
+import { X, Upload, FileText, Check, AlertCircle, Hash } from "lucide-react";
 import { useAppStore } from "@/store/useAppStore";
 import { parse, ParsedEntry } from "@/utils/bulkTextParser";
 import { parseUniversal } from "@/utils/universalParser";
+import { parseEventText, generateHashtags } from "@/utils/eventParser";
 import { cn } from "@/utils/cn";
 
 interface ImportModalProps {
@@ -156,6 +157,12 @@ export function ImportModal({ isOpen, onClose }: ImportModalProps) {
                                                         <div>📅 {(entry as any).eventInfo.date || "-"}</div>
                                                         <div>📍 {(entry as any).eventInfo.venue || "-"}</div>
                                                         <div className="col-span-2">🎪 {(entry as any).eventInfo.eventEn || (entry as any).eventInfo.eventJp || "-"}</div>
+                                                        {(entry as any).eventInfo.hashtags && (
+                                                            <div className="col-span-2 flex items-center gap-1">
+                                                                <Hash className="w-3 h-3" />
+                                                                <span className="text-[var(--accent-primary)] truncate">{(entry as any).eventInfo.hashtags}</span>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
                                             )}

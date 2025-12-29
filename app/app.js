@@ -2055,9 +2055,9 @@ ${igHashtags}`.trim();
 
 function updatePreview() {
     const templates = generatePostTemplates();
-    DOM.previewX1.textContent = templates.x1;
-    DOM.previewX2.textContent = templates.x2;
-    DOM.previewIg.textContent = templates.ig;
+    if (DOM.previewX1) DOM.previewX1.textContent = templates.x1;
+    if (DOM.previewX2) DOM.previewX2.textContent = templates.x2;
+    if (DOM.previewIg) DOM.previewIg.textContent = templates.ig;
 }
 
 // ========================================
